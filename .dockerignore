@@ -1,0 +1,7 @@
+data/
+hadoop-config/
+scripts/
+.git
+.gitignore
+*.md
+README.md

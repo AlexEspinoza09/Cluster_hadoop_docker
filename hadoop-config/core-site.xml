@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?xml-stylesheet type="text/xsl" href="configuration.xsl"?>
+<configuration>
+    <!-- NameNode URI -->
+    <property>
+        <name>fs.defaultFS</name>
+        <value>hdfs://hadoop-master:9000</value>
+        <description>NameNode URI</description>
+    </property>
+
+    <!-- Directorio temporal de Hadoop -->
+    <property>
+        <name>hadoop.tmp.dir</name>
+        <value>/opt/hadoop/data/tmp</value>
+        <description>Directorio temporal para Hadoop</description>
+    </property>
+
+    <!-- Usuario proxy para acceso web -->
+    <property>
+        <name>hadoop.http.staticuser.user</name>
+        <value>hadoop</value>
+    </property>
+
+    <!-- Configuración de seguridad básica -->
+    <property>
+        <name>hadoop.security.authentication</name>
+        <value>simple</value>
+    </property>
+
+    <property>
+        <name>hadoop.security.authorization</name>
+        <value>false</value>
+    </property>
+</configuration>

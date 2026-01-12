@@ -1,0 +1,119 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?xml-stylesheet type="text/xsl" href="configuration.xsl"?>
+<configuration>
+    <!-- ResourceManager hostname -->
+    <property>
+        <name>yarn.resourcemanager.hostname</name>
+        <value>hadoop-master</value>
+        <description>Hostname del ResourceManager</description>
+    </property>
+
+    <!-- ResourceManager address -->
+    <property>
+        <name>yarn.resourcemanager.address</name>
+        <value>hadoop-master:8032</value>
+        <description>Dirección del ResourceManager</description>
+    </property>
+
+    <!-- ResourceManager scheduler address -->
+    <property>
+        <name>yarn.resourcemanager.scheduler.address</name>
+        <value>hadoop-master:8030</value>
+        <description>Dirección del scheduler</description>
+    </property>
+
+    <!-- ResourceManager resource-tracker address -->
+    <property>
+        <name>yarn.resourcemanager.resource-tracker.address</name>
+        <value>hadoop-master:8031</value>
+        <description>Dirección del resource tracker</description>
+    </property>
+
+    <!-- ResourceManager Web UI -->
+    <property>
+        <name>yarn.resourcemanager.webapp.address</name>
+        <value>hadoop-master:8088</value>
+        <description>Dirección Web UI del ResourceManager</description>
+    </property>
+
+    <!-- NodeManager Web UI -->
+    <property>
+        <name>yarn.nodemanager.webapp.address</name>
+        <value>0.0.0.0:8042</value>
+        <description>Dirección Web UI del NodeManager</description>
+    </property>
+
+    <!-- Auxiliary services -->
+    <property>
+        <name>yarn.nodemanager.aux-services</name>
+        <value>mapreduce_shuffle</value>
+        <description>Servicios auxiliares para MapReduce</description>
+    </property>
+
+    <property>
+        <name>yarn.nodemanager.aux-services.mapreduce_shuffle.class</name>
+        <value>org.apache.hadoop.mapred.ShuffleHandler</value>
+    </property>
+
+    <!-- Memoria del NodeManager -->
+    <property>
+        <name>yarn.nodemanager.resource.memory-mb</name>
+        <value>2048</value>
+        <description>Memoria disponible para containers (2GB)</description>
+    </property>
+
+    <!-- CPUs virtuales del NodeManager -->
+    <property>
+        <name>yarn.nodemanager.resource.cpu-vcores</name>
+        <value>2</value>
+        <description>Número de CPUs virtuales</description>
+    </property>
+
+    <!-- Memoria mínima para containers -->
+    <property>
+        <name>yarn.scheduler.minimum-allocation-mb</name>
+        <value>512</value>
+        <description>Memoria mínima por container (512MB)</description>
+    </property>
+
+    <!-- Memoria máxima para containers -->
+    <property>
+        <name>yarn.scheduler.maximum-allocation-mb</name>
+        <value>2048</value>
+        <description>Memoria máxima por container (2GB)</description>
+    </property>
+
+    <!-- Directorio local para logs -->
+    <property>
+        <name>yarn.nodemanager.log-dirs</name>
+        <value>/opt/hadoop/logs</value>
+        <description>Directorio de logs del NodeManager</description>
+    </property>
+
+    <!-- Habilitar log aggregation -->
+    <property>
+        <name>yarn.log-aggregation-enable</name>
+        <value>true</value>
+        <description>Habilitar agregación de logs</description>
+    </property>
+
+    <!-- Retención de logs agregados -->
+    <property>
+        <name>yarn.log-aggregation.retain-seconds</name>
+        <value>604800</value>
+        <description>Retener logs por 7 días (604800 segundos)</description>
+    </property>
+
+    <!-- Chequeo de salud del NodeManager -->
+    <property>
+        <name>yarn.nodemanager.vmem-check-enabled</name>
+        <value>false</value>
+        <description>Desactivar verificación de memoria virtual</description>
+    </property>
+
+    <property>
+        <name>yarn.nodemanager.pmem-check-enabled</name>
+        <value>false</value>
+        <description>Desactivar verificación de memoria física</description>
+    </property>
+</configuration>

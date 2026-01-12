@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?xml-stylesheet type="text/xsl" href="configuration.xsl"?>
+<configuration>
+    <!-- Factor de replicación (3 nodos = 2 réplicas) -->
+    <property>
+        <name>dfs.replication</name>
+        <value>2</value>
+        <description>Número de réplicas de bloques</description>
+    </property>
+
+    <!-- Directorio del NameNode -->
+    <property>
+        <name>dfs.namenode.name.dir</name>
+        <value>file:///opt/hadoop/data/nameNode</value>
+        <description>Directorio para metadatos del NameNode</description>
+    </property>
+
+    <!-- Directorio de los DataNodes -->
+    <property>
+        <name>dfs.datanode.data.dir</name>
+        <value>file:///opt/hadoop/data/dataNode</value>
+        <description>Directorio para datos de DataNode</description>
+    </property>
+
+    <!-- Permisos de HDFS -->
+    <property>
+        <name>dfs.permissions.enabled</name>
+        <value>false</value>
+        <description>Desactivar permisos para simplificar (desarrollo)</description>
+    </property>
+
+    <!-- Web UI del NameNode -->
+    <property>
+        <name>dfs.namenode.http-address</name>
+        <value>hadoop-master:9870</value>
+        <description>Dirección HTTP del NameNode</description>
+    </property>
+
+    <!-- Web UI del DataNode -->
+    <property>
+        <name>dfs.datanode.http.address</name>
+        <value>0.0.0.0:9864</value>
+        <description>Dirección HTTP del DataNode</description>
+    </property>
+
+    <!-- Secondary NameNode -->
+    <property>
+        <name>dfs.namenode.secondary.http-address</name>
+        <value>hadoop-worker1:50090</value>
+        <description>Dirección del Secondary NameNode</description>
+    </property>
+
+    <!-- Tamaño de bloque (128MB por defecto) -->
+    <property>
+        <name>dfs.blocksize</name>
+        <value>134217728</value>
+        <description>Tamaño de bloque HDFS en bytes (128MB)</description>
+    </property>
+
+    <!-- Habilitar WebHDFS -->
+    <property>
+        <name>dfs.webhdfs.enabled</name>
+        <value>true</value>
+        <description>Habilitar WebHDFS REST API</description>
+    </property>
+</configuration>

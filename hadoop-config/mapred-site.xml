@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?xml-stylesheet type="text/xsl" href="configuration.xsl"?>
+<configuration>
+    <!-- Framework de MapReduce -->
+    <property>
+        <name>mapreduce.framework.name</name>
+        <value>yarn</value>
+        <description>Usar YARN como framework de ejecución</description>
+    </property>
+
+    <!-- Job History Server -->
+    <property>
+        <name>mapreduce.jobhistory.address</name>
+        <value>hadoop-master:10020</value>
+        <description>Dirección del Job History Server</description>
+    </property>
+
+    <property>
+        <name>mapreduce.jobhistory.webapp.address</name>
+        <value>hadoop-master:19888</value>
+        <description>Web UI del Job History Server</description>
+    </property>
+
+    <!-- Directorio intermedio en HDFS -->
+    <property>
+        <name>mapreduce.jobhistory.intermediate-done-dir</name>
+        <value>/mr-history/tmp</value>
+        <description>Directorio intermedio de jobs en HDFS</description>
+    </property>
+
+    <property>
+        <name>mapreduce.jobhistory.done-dir</name>
+        <value>/mr-history/done</value>
+        <description>Directorio de jobs completados en HDFS</description>
+    </property>
+
+    <!-- Memoria para Map tasks -->
+    <property>
+        <name>mapreduce.map.memory.mb</name>
+        <value>512</value>
+        <description>Memoria para Map tasks (512MB)</description>
+    </property>
+
+    <!-- Memoria para Reduce tasks -->
+    <property>
+        <name>mapreduce.reduce.memory.mb</name>
+        <value>512</value>
+        <description>Memoria para Reduce tasks (512MB)</description>
+    </property>
+
+    <!-- JVM heap para Map tasks -->
+    <property>
+        <name>mapreduce.map.java.opts</name>
+        <value>-Xmx410m</value>
+        <description>Heap JVM para Map tasks (410MB)</description>
+    </property>
+
+    <!-- JVM heap para Reduce tasks -->
+    <property>
+        <name>mapreduce.reduce.java.opts</name>
+        <value>-Xmx410m</value>
+        <description>Heap JVM para Reduce tasks (410MB)</description>
+    </property>
+
+    <!-- ApplicationMaster -->
+    <property>
+        <name>yarn.app.mapreduce.am.resource.mb</name>
+        <value>512</value>
+        <description>Memoria para ApplicationMaster (512MB)</description>
+    </property>
+
+    <property>
+        <name>yarn.app.mapreduce.am.command-opts</name>
+        <value>-Xmx410m</value>
+        <description>Heap JVM para ApplicationMaster (410MB)</description>
+    </property>
+
+    <!-- Configuración del ambiente de ejecución -->
+    <property>
+        <name>mapreduce.application.classpath</name>
+        <value>$HADOOP_MAPRED_HOME/share/hadoop/mapreduce/*:$HADOOP_MAPRED_HOME/share/hadoop/mapreduce/lib/*</value>
+    </property>
+
+    <!-- Shuffle paralelo -->
+    <property>
+        <name>mapreduce.reduce.shuffle.parallelcopies</name>
+        <value>5</value>
+        <description>Número de copias paralelas en shuffle</description>
+    </property>
+
+    <!-- Variables de entorno para MapReduce -->
+    <property>
+        <name>yarn.app.mapreduce.am.env</name>
+        <value>HADOOP_MAPRED_HOME=/opt/hadoop</value>
+    </property>
+
+    <property>
+        <name>mapreduce.map.env</name>
+        <value>HADOOP_MAPRED_HOME=/opt/hadoop</value>
+    </property>
+
+    <property>
+        <name>mapreduce.reduce.env</name>
+        <value>HADOOP_MAPRED_HOME=/opt/hadoop</value>
+    </property>
+</configuration>
