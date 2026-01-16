@@ -1,0 +1,51 @@
+Actúa como un auditor técnico de infraestructura y Hadoop.
+
+Contexto:
+He construido un clúster Hadoop utilizando Docker (contenedores) en lugar de máquinas virtuales tradicionales. 
+El objetivo es que el clúster en Docker esté configurado y se comporte de forma equivalente a un clúster montado en VMs, como el descrito en el documento de referencia (instalación clásica con VirtualBox, red NAT, IPs estáticas, archivo /etc/hosts, SSH entre nodos, etc.).
+
+Tu tarea es:
+1. Analizar cómo debería estar configurado un clúster Hadoop en Docker para que sea equivalente, a nivel de red, nodos y comunicación, a un clúster en máquinas virtuales.
+2. Detallar claramente los puntos que deben cumplirse para considerar que el clúster Docker está correctamente configurado “como si fueran VMs”.
+3. Indicar qué configuraciones son obligatorias, cuáles recomendadas y cuáles no aplican en Docker (pero sí en VMs).
+4. Proponer comandos de verificación (no de instalación) para comprobar que el clúster cumple con estas condiciones.
+
+Base conceptual (equivalencia con VMs):
+El documento original describe:
+- Creación de múltiples nodos (1 maestro y 2 workers).
+- Red privada compartida entre nodos (NAT).
+- Comunicación interna entre nodos mediante IP fija o nombres de host.
+- Resolución de nombres vía /etc/hosts.
+- Conectividad bidireccional entre nodos (ping, ssh).
+- Acceso a Internet desde los nodos.
+- Separación clara de roles: nodo maestro y nodos trabajadores.
+- Hadoop funcionando sobre esta topología.
+
+Traducción esperada a Docker:
+Debes explicar cómo estos conceptos se reflejan en Docker, por ejemplo:
+- Red Docker bridge personalizada que actúe como red privada del clúster.
+- Contenedores que representen cada nodo (master, worker1, worker2).
+- Asignación de nombres de contenedor como hostnames estables.
+- Resolución DNS interna de Docker o uso explícito de /etc/hosts dentro de los contenedores.
+- IPs estáticas dentro de la red Docker (si aplica) o explicación de por qué no son necesarias.
+- Conectividad comprobable entre contenedores (ping, ssh).
+- Acceso a Internet desde los contenedores.
+- Puertos expuestos solo cuando sea necesario (por ejemplo, UI de Hadoop).
+
+Validaciones que debes incluir:
+- Cómo comprobar que todos los nodos están en la misma red Docker.
+- Cómo verificar que el nodo maestro puede comunicarse con todos los workers.
+- Cómo validar que SSH funciona entre nodos sin intervención manual.
+- Cómo verificar que Hadoop detecta correctamente los nodos workers.
+- Qué archivos de configuración de Hadoop deben reflejar los nombres de los nodos (core-site.xml, hdfs-site.xml, workers/slaves).
+- Diferencias clave entre Docker y VM, y por qué no rompen la equivalencia funcional.
+
+Formato de salida esperado:
+- Secciones claras y numeradas.
+- Lenguaje técnico, preciso y verificable.
+- No incluir pasos gráficos (GUI).
+- No instalar nada desde cero: solo configuración, estructura y validación.
+- Asumir que Docker y Hadoop ya están instalados.
+
+Objetivo final:
+Que cualquier evaluador técnico pueda leer tu respuesta y concluir, sin ambigüedades, que el clúster Hadoop en Docker está correctamente configurado y es funcionalmente equivalente a uno desplegado en máquinas virtuales.

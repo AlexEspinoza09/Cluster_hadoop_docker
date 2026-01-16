@@ -1,0 +1,132 @@
+Actúa como un ingeniero experto en Hadoop HDFS y despliegues en Docker.
+
+Contexto:
+Tengo un clúster Hadoop desplegado en Docker, compuesto por:
+- 1 nodo maestro (NameNode)
+- 2 nodos workers (DataNodes)
+El clúster debe comportarse como un clúster clásico en máquinas virtuales.
+
+Objetivo:
+Ayudarme a CONFIGURAR y VERIFICAR el clúster Hadoop para poder resolver correctamente
+los ejercicios de:
+1) Block Size en HDFS
+2) Balanceamiento de bloques en HDFS
+
+NO quiero que resuelvas los ejercicios ni completes tablas.
+Solo quiero que me guíes en:
+- Qué debe estar configurado
+- Qué debo verificar
+- Qué comandos debo ejecutar
+para que los ejercicios se puedan realizar sin errores.
+
+=====================================================
+1. ESTADO DEL CLÚSTER (REQUISITOS PREVIOS)
+=====================================================
+
+Debes indicarme cómo verificar que:
+
+1. El clúster HDFS está correctamente iniciado:
+   - NameNode activo
+   - DataNodes registrados (2 DataNodes)
+
+2. Los scripts start-dfs.sh y stop-dfs.sh funcionan dentro del contenedor maestro
+   y levantan correctamente todos los demonios HDFS.
+
+3. Desde el nodo maestro se puede ejecutar:
+   - hdfs dfs -ls /
+   - hdfs dfsadmin -report
+
+4. Hadoop reconoce correctamente:
+   - El tamaño de bloque por defecto
+   - El factor de replicación por defecto
+
+=====================================================
+2. CONFIGURACIÓN NECESARIA PARA EJERCICIO 1 (BLOCK SIZE)
+=====================================================
+
+Debes explicarme y verificar:
+
+1. Cómo asegurar que el clúster permite:
+   - Cambiar el block size por comando (-D dfs.blocksize)
+   - Cambiar el factor de replicación por comando (-D dfs.replication)
+
+2. Qué archivos de configuración deben existir y estar correctos:
+   - core-site.xml
+   - hdfs-site.xml
+   - workers / slaves
+
+3. Cómo comprobar:
+   - Tamaño de bloque efectivo de un fichero en HDFS
+   - Número de bloques creados
+   - Ubicación de los bloques por DataNode
+
+4. Qué comandos debo usar para:
+   - Insertar un fichero grande (>1GB) con block size personalizado
+   - Leer el fichero
+   - Medir tiempo de lectura sin mostrar contenido
+   - Eliminar el fichero tras cada prueba
+
+5. Cómo verificar en qué DataNode están los bloques usando:
+   - hdfs fsck
+   - filtros por IP o hostname del DataNode
+
+=====================================================
+3. CONFIGURACIÓN NECESARIA PARA EJERCICIO 2 (BALANCEAMIENTO)
+=====================================================
+
+Debes indicarme cómo preparar el clúster para estudiar balanceamiento:
+
+1. Cómo asegurar que:
+   - Existen exactamente 2 DataNodes
+   - Ambos tienen espacio disponible similar
+
+2. Cómo fijar explícitamente el factor de replicación a 1
+   y por qué es importante para observar el balanceo real.
+
+3. Cómo verificar la distribución de bloques entre DataNodes:
+   - Antes de insertar el fichero
+   - Después de insertarlo
+   - Comparando distintos tamaños de bloque
+
+4. Qué métricas observar:
+   - Número de bloques por DataNode
+   - Espacio usado por DataNode
+   - Distribución uniforme o no
+
+=====================================================
+4. VALIDACIONES OBLIGATORIAS
+=====================================================
+
+Incluye instrucciones para validar:
+
+- Que el clúster no esté en modo seguro (safe mode)
+- Que los DataNodes no estén en estado dead
+- Que no existan residuos de pruebas anteriores
+- Que los cambios de block size NO afectan globalmente al clúster
+  sino solo al fichero insertado
+
+=====================================================
+5. DIFERENCIAS DOCKER VS VM (JUSTIFICACIÓN ACADÉMICA)
+=====================================================
+
+Explica brevemente:
+- Qué diferencias existen entre Docker y VM
+- Por qué NO afectan a los ejercicios de HDFS
+- Por qué los resultados de block size y balanceamiento siguen siendo válidos
+
+=====================================================
+FORMATO DE RESPUESTA
+=====================================================
+
+- Usa secciones numeradas
+- Usa lenguaje técnico y verificable
+- Incluye comandos concretos
+- NO resuelvas las preguntas teóricas
+- NO completes tablas
+- Asume que Hadoop ya está instalado
+- Asume que el clúster ya existe
+
+Objetivo final:
+Que yo pueda ejecutar los ejercicios de Block Size y Balanceamiento exactamente
+como están definidos en el documento, usando mi clúster Hadoop en Docker,
+sin errores de configuración ni inconsistencias.
