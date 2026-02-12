@@ -1,0 +1,166 @@
+================================================================================
+EJERCICIO 1: BLOCK SIZE - Comparar cantidad de bloques
+================================================================================
+
+PASO 1: Crear archivo de prueba de 1.5 GB
+-----------------------------------------
+docker exec -u hadoop hadoop-master bash -c "dd if=/dev/urandom of=/tmp/testfile_1.5gb bs=1M count=1536"
+
+
+PASO 2: Crear directorios en HDFS
+---------------------------------
+docker exec -u hadoop hadoop-master bash -c "hdfs dfs -mkdir -p /ejercicio1/bs64mb /ejercicio1/bs128mb /ejercicio1/bs256mb"
+
+
+PASO 3: Subir archivo con diferentes block sizes
+------------------------------------------------
+
+# Con block size 64 MB:
+docker exec -u hadoop hadoop-master bash -c "hdfs dfs -D dfs.blocksize=67108864 -D dfs.replication=1 -put /tmp/testfile_1.5gb /ejercicio1/bs64mb/"
+
+# Con block size 128 MB:
+docker exec -u hadoop hadoop-master bash -c "hdfs dfs -D dfs.blocksize=134217728 -D dfs.replication=1 -put /tmp/testfile_1.5gb /ejercicio1/bs128mb/"
+
+# Con block size 256 MB:
+docker exec -u hadoop hadoop-master bash -c "hdfs dfs -D dfs.blocksize=268435456 -D dfs.replication=1 -put /tmp/testfile_1.5gb /ejercicio1/bs256mb/"
+
+
+PASO 4: Verificar cantidad de bloques creados
+---------------------------------------------
+
+# 64 MB -> deberia crear 24 bloques (1536/64)
+docker exec -u hadoop hadoop-master bash -c "hdfs fsck /ejercicio1/bs64mb/testfile_1.5gb -files -blocks | grep 'Total blocks'"
+
+# 128 MB -> deberia crear 12 bloques (1536/128)
+docker exec -u hadoop hadoop-master bash -c "hdfs fsck /ejercicio1/bs128mb/testfile_1.5gb -files -blocks | grep 'Total blocks'"
+
+# 256 MB -> deberia crear 6 bloques (1536/256)
+docker exec -u hadoop hadoop-master bash -c "hdfs fsck /ejercicio1/bs256mb/testfile_1.5gb -files -blocks | grep 'Total blocks'"
+
+
+PASO 5: LEER archivos y medir tiempo de lectura
+-----------------------------------------------
+
+# Lectura con 64 MB blocks:
+docker exec -u hadoop hadoop-master bash -c "time hdfs dfs -cat /ejercicio1/bs64mb/testfile_1.5gb > /dev/null"
+
+# Lectura con 128 MB blocks:
+docker exec -u hadoop hadoop-master bash -c "time hdfs dfs -cat /ejercicio1/bs128mb/testfile_1.5gb > /dev/null"
+
+# Lectura con 256 MB blocks:
+docker exec -u hadoop hadoop-master bash -c "time hdfs dfs -cat /ejercicio1/bs256mb/testfile_1.5gb > /dev/null"
+
+
+PASO 6: Limpiar ejercicio 1
+---------------------------
+docker exec -u hadoop hadoop-master bash -c "hdfs dfs -rm -r /ejercicio1"
+docker exec -u hadoop hadoop-master bash -c "rm /tmp/testfile_1.5gb"
+
+
+================================================================================
+EJERCICIO 2: BALANCEAMIENTO - Ver distribucion de bloques entre nodos
+================================================================================
+
+IMPORTANTE: HDFS coloca los bloques en el NODO LOCAL donde ejecutas el comando.
+Para ver distribucion real, hay que subir archivos DESDE DIFERENTES NODOS.
+
+PASO 1: Ver estado inicial de bloques por DataNode
+--------------------------------------------------
+docker exec -u hadoop hadoop-master bash -c "hdfs dfsadmin -report | grep -E 'Name:|Num of Blocks:'"
+
+
+PASO 2: Crear directorio en HDFS
+--------------------------------
+docker exec -u hadoop hadoop-master bash -c "hdfs dfs -mkdir -p /ejercicio2"
+
+
+PASO 3: Crear y subir archivos DESDE CADA NODO (512 MB cada uno)
+----------------------------------------------------------------
+
+# Desde hadoop-master (bloques quedaran en 172.23.0.2):
+docker exec -u hadoop hadoop-master bash -c "dd if=/dev/urandom of=/tmp/file_master bs=1M count=512 2>/dev/null && hdfs dfs -D dfs.replication=1 -put /tmp/file_master /ejercicio2/"
+
+# Desde hadoop-worker1 (bloques quedaran en 172.23.0.3):
+docker exec -u hadoop hadoop-worker1 bash -c "dd if=/dev/urandom of=/tmp/file_worker1 bs=1M count=512 2>/dev/null && hdfs dfs -D dfs.replication=1 -put /tmp/file_worker1 /ejercicio2/"
+
+# Desde hadoop-worker2 (bloques quedaran en 172.23.0.4):
+docker exec -u hadoop hadoop-worker2 bash -c "dd if=/dev/urandom of=/tmp/file_worker2 bs=1M count=512 2>/dev/null && hdfs dfs -D dfs.replication=1 -put /tmp/file_worker2 /ejercicio2/"
+
+
+PASO 4: Ver distribucion de bloques por DataNode
+------------------------------------------------
+docker exec -u hadoop hadoop-master bash -c "hdfs dfsadmin -report | grep -E 'Name:|Num of Blocks:'"
+
+# Resultado esperado (4 bloques por nodo = 512MB / 128MB):
+# Name: 172.23.0.2:9866 (hadoop-master)      -> Num of Blocks: 4
+# Name: 172.23.0.3:9866 (hadoop-worker1)     -> Num of Blocks: 4
+# Name: 172.23.0.4:9866 (hadoop-worker2)     -> Num of Blocks: 4
+
+
+PASO 5: Ver en que nodo quedo cada bloque de cada archivo
+---------------------------------------------------------
+
+# Bloques de file_master (deben estar en 172.23.0.2):
+docker exec -u hadoop hadoop-master bash -c "hdfs fsck /ejercicio2/file_master -files -blocks -locations 2>/dev/null | grep DatanodeInfo"
+
+# Bloques de file_worker1 (deben estar en 172.23.0.3):
+docker exec -u hadoop hadoop-master bash -c "hdfs fsck /ejercicio2/file_worker1 -files -blocks -locations 2>/dev/null | grep DatanodeInfo"
+
+# Bloques de file_worker2 (deben estar en 172.23.0.4):
+docker exec -u hadoop hadoop-master bash -c "hdfs fsck /ejercicio2/file_worker2 -files -blocks -locations 2>/dev/null | grep DatanodeInfo"
+
+
+PASO 6: Ver espacio usado por cada DataNode
+-------------------------------------------
+docker exec -u hadoop hadoop-master bash -c "hdfs dfsadmin -report | grep -E 'Name:|DFS Used:'"
+
+
+PASO 7: Ejecutar el balanceador (opcional - mueve bloques si hay desbalance)
+----------------------------------------------------------------------------
+docker exec -u hadoop hadoop-master bash -c "hdfs balancer -threshold 1"
+
+# Nota: Con archivos pequenios (<1% del disco) el balanceador dira "balanced"
+# porque el threshold se basa en % de uso del disco, no en numero de bloques.
+
+
+PASO 8: Limpiar ejercicio 2
+---------------------------
+docker exec -u hadoop hadoop-master bash -c "hdfs dfs -rm -r /ejercicio2"
+docker exec -u hadoop hadoop-master bash -c "rm /tmp/file_master"
+docker exec -u hadoop hadoop-worker1 bash -c "rm /tmp/file_worker1"
+docker exec -u hadoop hadoop-worker2 bash -c "rm /tmp/file_worker2"
+
+
+================================================================================
+RESUMEN - QUE DEMUESTRA CADA EJERCICIO
+================================================================================
+
+EJERCICIO 1 (Block Size):
+- Un archivo de 1.5 GB con block size 64 MB  = 24 bloques
+- Un archivo de 1.5 GB con block size 128 MB = 12 bloques
+- Un archivo de 1.5 GB con block size 256 MB = 6 bloques
+- Bloques mas grandes = menos overhead de metadatos en NameNode
+
+EJERCICIO 2 (Balanceamiento):
+- HDFS coloca bloques en el NODO LOCAL donde se ejecuta el put
+- Archivo subido desde master    -> bloques en master (172.23.0.2)
+- Archivo subido desde worker1   -> bloques en worker1 (172.23.0.3)
+- Archivo subido desde worker2   -> bloques en worker2 (172.23.0.4)
+- El balanceador redistribuye bloques si hay diferencia de uso > threshold
+
+
+================================================================================
+COMANDOS UTILES
+================================================================================
+
+# Ver DataNodes activos:
+docker exec -u hadoop hadoop-master bash -c "hdfs dfsadmin -report | grep 'Name:'"
+
+# Ver bloques por DataNode:
+docker exec -u hadoop hadoop-master bash -c "hdfs dfsadmin -report | grep -E 'Name:|Num of Blocks:'"
+
+# Ver todo en HDFS:
+docker exec -u hadoop hadoop-master bash -c "hdfs dfs -ls -R /"
+
+# Limpiar todo:
+docker exec -u hadoop hadoop-master bash -c "hdfs dfs -rm -r /ejercicio1 /ejercicio2 2>/dev/null"

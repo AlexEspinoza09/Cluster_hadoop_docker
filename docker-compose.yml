@@ -32,7 +32,7 @@ services:
     volumes:
       - ./hadoop-config:/tmp/hadoop-config
       - ./scripts:/tmp/scripts
-      - ./data/datanode1:/opt/hadoop/data/dataNode
+      - datanode1-data:/opt/hadoop/data/dataNode
     environment:
       - HADOOP_NODE_TYPE=worker
     depends_on:
@@ -53,7 +53,7 @@ services:
     volumes:
       - ./hadoop-config:/tmp/hadoop-config
       - ./scripts:/tmp/scripts
-      - ./data/datanode2:/opt/hadoop/data/dataNode
+      - datanode2-data:/opt/hadoop/data/dataNode
     environment:
       - HADOOP_NODE_TYPE=worker
     depends_on:
@@ -61,6 +61,10 @@ services:
     command: tail -f /dev/null
     stdin_open: true
     tty: true
+
+volumes:
+  datanode1-data:
+  datanode2-data:
 
 networks:
   hadoop-network:

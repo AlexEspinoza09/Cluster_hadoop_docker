@@ -63,4 +63,17 @@
         <value>true</value>
         <description>Habilitar WebHDFS REST API</description>
     </property>
+
+    <!-- Deshabilitar NativeIO para evitar errores de chmod en Windows/Docker -->
+    <property>
+        <name>dfs.datanode.use.datanode.hostname</name>
+        <value>true</value>
+    </property>
+
+    <!-- Deshabilitar verificación de permisos del directorio de datos -->
+    <property>
+        <name>dfs.datanode.data.dir.perm.check.enabled</name>
+        <value>false</value>
+        <description>Deshabilitar check de permisos para volúmenes montados desde Windows</description>
+    </property>
 </configuration>

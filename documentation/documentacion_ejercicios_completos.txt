@@ -1,0 +1,498 @@
+================================================================================
+DOCUMENTACION: EJERCICIOS HDFS - BLOCK SIZE & BALANCEAMIENTO
+================================================================================
+
+INFORMACION DEL PROYECTO
+------------------------
+Estudiante: Javier
+Fecha: 08/02/2026
+Entorno: Cluster HDFS con Docker - 1 NameNode + 2 DataNodes
+Hadoop Version: 3.3.6
+
+
+================================================================================
+COMANDOS HDFS UTILIZADOS
+================================================================================
+
+1. GESTION DEL CLUSTER
+   - Iniciar cluster: start-dfs.sh
+   - Parar cluster: stop-dfs.sh
+   - Ver estado del cluster: hdfs dfsadmin -report
+
+2. OPERACIONES CON FICHEROS
+   - Insertar fichero con configuracion especifica:
+     hdfs dfs -D dfs.blocksize=X -D dfs.replication=Y -copyFromLocal ficheroOrigen destino
+
+   - Leer contenido de fichero:
+     hdfs dfs -cat fichero
+
+   - Leer fichero y medir tiempo (sin mostrar contenido):
+     time hdfs dfs -cat fichero >/dev/null
+
+   - Borrar fichero:
+     hdfs dfs -rm fichero
+
+3. ANALISIS Y ESTADISTICAS
+   - Contar bloques en un slave especifico:
+     hdfs fsck /ruta/fichero -files -blocks -locations | grep IPslave | wc -l
+
+   - Ver estadisticas completas de un fichero:
+     hdfs fsck fichero -files -blocks -locations
+
+
+================================================================================
+EJERCICIO 1: BLOCK SIZE
+================================================================================
+
+OBJETIVO:
+Analizar el comportamiento de HDFS al variar el tamano de bloque y su impacto
+en el rendimiento del sistema.
+
+REQUISITOS:
+- Fichero de prueba: 1100 MB (1153433600 bytes), generado con dd if=/dev/urandom
+- Factor de replicacion: 2 (genera 2 copias distribuidas en los 2 DataNodes)
+- Tamanos de bloque a probar: 2m, 32m, 128m, 2GB
+
+PROCEDIMIENTO:
+1. Crear fichero de prueba de 1100 MB:
+   dd if=/dev/urandom of=/tmp/testfile.txt bs=1M count=1100
+
+2. Para cada tamano de bloque:
+   a. Insertar fichero en HDFS:
+      hdfs dfs -D dfs.blocksize=[TAMANO] -D dfs.replication=2 -copyFromLocal /tmp/testfile.txt /ejercicio1_Xm.txt
+   b. Medir tiempo de insercion (con time)
+   c. Realizar 3 lecturas y medir tiempos:
+      time hdfs dfs -cat /ejercicio1_Xm.txt >/dev/null
+   d. Contar numero de bloques:
+      hdfs fsck /ejercicio1_Xm.txt -files -blocks
+   e. Eliminar fichero antes de siguiente prueba:
+      hdfs dfs -rm /ejercicio1_Xm.txt
+
+TABLA DE RESULTADOS:
+-------------------
+
+| block_size | # blocks | input_time | read_time_1 | read_time_2 | read_time_3 | avg_read_time |
+|------------|----------|------------|-------------|-------------|-------------|---------------|
+| 2m         | 550      | 30.676s    | 10.033s     | 12.633s     | 7.988s      | 10.218s       |
+| 32m        | 35       | 17.263s    | 10.414s     | 7.448s      | 6.697s      | 8.186s        |
+| 128m       | 9        | 17.256s    | 9.343s      | 7.615s      | 7.011s      | 7.990s        |
+| 2GB        | 1        | 15.294s    | 6.750s      | 8.267s      | 27.448s     | 14.155s       |
+
+CALCULOS TEORICOS:
+-----------------
+Tamano del fichero: 1100 MB (1153433600 bytes)
+
+Para 2m:    Bloques esperados = 1100 / 2   = 550   -> Real: 550 (COINCIDE)
+Para 32m:   Bloques esperados = 1100 / 32  = 34.38 -> Real: 35  (COINCIDE, redondeo al alza)
+Para 128m:  Bloques esperados = 1100 / 128 = 8.59  -> Real: 9   (COINCIDE, redondeo al alza)
+Para 2GB:   Bloques esperados = 1100 / 2048 = 0.54 -> Real: 1   (COINCIDE, minimo 1 bloque)
+
+ANALISIS Y RESPUESTAS:
+---------------------
+
+1. Tiene sentido el numero de bloques creado? Es el minimo numero de bloques posible?
+
+   RESPUESTA:
+   Si, el numero de bloques creado tiene sentido y coincide con los calculos teoricos.
+   HDFS divide el fichero en bloques del tamano especificado, y si el ultimo fragmento
+   es menor que el tamano del bloque, se crea un bloque mas pequeno (no se desperdicia
+   espacio). Por ejemplo:
+   - Con 2m: 1100MB / 2MB = 550 bloques exactos (el fichero es multiplo exacto).
+   - Con 32m: 1100MB / 32MB = 34.375, por lo que se necesitan 35 bloques (34 completos
+     + 1 parcial de ~12MB).
+   - Con 128m: 1100MB / 128MB = 8.59, se necesitan 9 bloques (8 completos + 1 parcial
+     de ~76MB).
+   - Con 2GB: Como el fichero (1100MB) es menor que el bloque (2048MB), todo el fichero
+     cabe en un unico bloque.
+
+   En todos los casos, se alcanza el minimo numero de bloques posible. HDFS utiliza el
+   tamano de bloque como maximo, nunca como tamano fijo, por lo que no hay desperdicio
+   de espacio en disco.
+
+
+2. Sobre el tiempo de insercion, como afecta el tamano de los bloques?
+
+   RESPUESTA:
+   Se observa una tendencia clara: a mayor tamano de bloque, menor tiempo de insercion.
+
+   - 2m (550 bloques):  30.676s  -> El mas lento
+   - 32m (35 bloques):  17.263s  -> Reduccion significativa (~45% mas rapido)
+   - 128m (9 bloques):  17.256s  -> Similar a 32m
+   - 2GB (1 bloque):    15.294s  -> El mas rapido
+
+   La razon principal es el overhead de metadatos: cada bloque requiere que el NameNode
+   registre informacion (ubicacion, replicas, checksums) y que se establezcan conexiones
+   de red con los DataNodes. Con 550 bloques, el overhead acumulado de crear y registrar
+   cada bloque es muy significativo (casi el doble de tiempo que con bloques grandes).
+
+   A partir de 32m, la mejora se estabiliza porque el cuello de botella pasa a ser el
+   ancho de banda de red/disco para transferir los datos, no el overhead de metadatos.
+
+   Conclusion: Bloques demasiado pequenos penalizan severamente la insercion por el
+   overhead de gestion. Bloques de 32m o superiores minimizan este problema.
+
+
+3. Sobre el tiempo de lectura, como afecta el tamano de los bloques?
+
+   RESPUESTA:
+   Los tiempos promedio de lectura muestran esta tendencia:
+
+   - 2m (550 bloques):  10.218s promedio -> El mas lento
+   - 32m (35 bloques):   8.186s promedio -> Mejora notable
+   - 128m (9 bloques):   7.990s promedio -> El mas rapido en promedio
+   - 2GB (1 bloque):    14.155s promedio -> Anomalia (tercer read muy lento: 27.4s)
+
+   Con bloques pequenos (2m), el overhead de busqueda entre bloques es significativo:
+   cada bloque requiere una conexion al DataNode correspondiente, negociacion de
+   protocolo, y transferencia. Con 550 conexiones vs 9 conexiones, la diferencia
+   es notable.
+
+   El caso de 2GB muestra una anomalia interesante: al tener un unico bloque de 1.1GB,
+   no hay paralelismo posible en la lectura. Ademas, un solo DataNode sirve toda la
+   lectura, eliminando la posibilidad de distribuir la carga. La tercera lectura fue
+   anormalmente lenta (27.4s), posiblemente por presion de I/O en el DataNode.
+
+   Conclusion: El tamano optimo para lectura en nuestro entorno es 128m, que ofrece
+   un buen equilibrio entre minimizar el overhead de conexiones y mantener la
+   posibilidad de lectura paralela desde multiples DataNodes.
+
+
+4. Suponga que el fichero es del orden de Terabytes, consideraria bloques de tamano
+   por defecto (128 MB)?, por que?
+
+   RESPUESTA:
+   Para un fichero de 1 TB con bloques de 128 MB:
+   - Numero de bloques = 1024 * 1024 MB / 128 MB = 8,192 bloques
+   - Con replicacion 3, el NameNode gestionaria: 8,192 * 3 = 24,576 entradas de bloque
+   - Cada entrada de bloque consume ~150 bytes de memoria en el NameNode
+   - Memoria NameNode para este fichero: ~3.6 MB (manejable)
+
+   Para un fichero de 10 TB:
+   - 81,920 bloques * 3 replicas = 245,760 entradas -> ~36 MB de memoria NameNode
+   - Esto sigue siendo manejable.
+
+   Sin embargo, para un fichero de 1 PB (1000 TB):
+   - 8,388,608 bloques * 3 replicas = 25,165,824 entradas -> ~3.6 GB solo para un fichero
+   - Aqui el NameNode empezaria a sufrir problemas de memoria.
+
+   RECOMENDACION:
+   - Para ficheros de 1-10 TB: 128 MB es adecuado. El numero de bloques es manejable
+     y permite buen paralelismo.
+   - Para ficheros de 10-100 TB: Se recomienda aumentar a 256 MB o 512 MB para reducir
+     la carga del NameNode a la mitad o un cuarto.
+   - Para ficheros de >100 TB: Se recomiendan bloques de 1 GB o mas.
+
+   La razon tecnica es que el NameNode almacena TODOS los metadatos en memoria RAM.
+   Mas bloques = mas memoria consumida = mayor latencia en las operaciones del NameNode.
+   Ademas, con Terabytes de datos, los trabajos MapReduce crearian una tarea por bloque,
+   y demasiadas tareas pequenas introducen overhead de scheduling significativo.
+
+   En resumen: para Terabytes, 128 MB es un punto de partida razonable, pero se deberia
+   evaluar aumentar a 256 MB o mas dependiendo del volumen total y patron de acceso.
+
+
+CONCLUSIONES EJERCICIO 1:
+-------------------------
+1. El numero de bloques siempre es el minimo necesario (ceil(tamano_fichero / tamano_bloque)).
+2. Bloques mas grandes reducen el tiempo de insercion al minimizar el overhead de metadatos.
+3. Para lectura, el tamano optimo observado fue 128 MB: buen equilibrio entre overhead
+   de conexiones y capacidad de paralelismo.
+4. Bloques excesivamente grandes (2 GB) eliminan el paralelismo y pueden causar cuellos
+   de botella en un solo DataNode.
+5. Para ficheros de Terabytes, 128 MB es adecuado pero se debe considerar aumentar a
+   256-512 MB para reducir la carga del NameNode.
+
+
+================================================================================
+EJERCICIO 2: BALANCEAMIENTO
+================================================================================
+
+OBJETIVO:
+Analizar como HDFS distribuye los bloques entre los DataNodes del cluster y
+evaluar el impacto del tamano de bloque en el balanceamiento.
+
+REQUISITOS:
+- Mismo fichero del Ejercicio 1 (1100 MB)
+- Factor de replicacion: 1 (solo 1 copia, sin replicas)
+- Tamanos de bloque a probar: 2m, 32m, 128m
+- Cluster con 2 DataNodes:
+  * Worker1 (hadoop-worker1): 172.23.0.3
+  * Worker2 (hadoop-worker2): 172.23.0.4
+
+PROCEDIMIENTO:
+1. Limpiar HDFS de ficheros anteriores
+2. Para cada tamano de bloque:
+   a. Insertar fichero con replicacion=1:
+      hdfs dfs -D dfs.blocksize=[TAMANO] -D dfs.replication=1 -copyFromLocal /tmp/testfile.txt /ejercicio2_Xm.txt
+   b. Contar bloques en worker1:
+      hdfs fsck /ejercicio2_Xm.txt -files -blocks -locations | grep 172.23.0.3 | wc -l
+   c. Contar bloques en worker2:
+      hdfs fsck /ejercicio2_Xm.txt -files -blocks -locations | grep 172.23.0.4 | wc -l
+   d. Eliminar fichero antes de siguiente prueba
+
+TABLA DE RESULTADOS:
+-------------------
+
+| block_size | # blocks worker1 | # blocks worker2 | Total blocks | Balance ratio |
+|------------|-------------------|-------------------|--------------|---------------|
+| 2m         | 269               | 281               | 550          | 0.957         |
+| 32m        | 19                | 16                | 35           | 0.842         |
+| 128m       | 7                 | 2                 | 9            | 0.286         |
+
+CALCULOS:
+---------
+Balance ratio = min(blocks_slave1, blocks_slave2) / max(blocks_slave1, blocks_slave2)
+Un ratio de 1.0 indica balanceamiento perfecto.
+
+Para 2m:    Balance ratio = 269 / 281 = 0.957  (Excelente balanceamiento)
+Para 32m:   Balance ratio = 16 / 19   = 0.842  (Buen balanceamiento)
+Para 128m:  Balance ratio = 2 / 7     = 0.286  (Mal balanceamiento)
+
+
+ANALISIS Y RESPUESTAS:
+---------------------
+
+1. Como cree que HDFS distribuye los bloques?
+
+   RESPUESTA:
+   HDFS utiliza una politica de ubicacion de bloques (Block Placement Policy) que
+   distribuye los bloques siguiendo estos principios:
+
+   - Algoritmo round-robin modificado: HDFS no utiliza un round-robin estricto, sino
+     que elige el DataNode para cada bloque considerando multiples factores.
+
+   - Factores que HDFS considera:
+     a) Espacio disponible en cada DataNode
+     b) Carga actual (numero de transferencias en curso)
+     c) Proximidad de red (rack-awareness)
+     d) Capacidad del nodo
+
+   - En nuestro caso con 2 DataNodes y replicacion=1, se observa que HDFS intenta
+     distribuir equitativamente entre ambos nodos, pero no de forma perfectamente
+     alterna. La distribucion es aproximadamente 50/50 pero con variaciones naturales
+     debido a la naturaleza no determinista del algoritmo.
+
+   - Con replicacion > 1, HDFS aplica la politica de replica: la primera replica va al
+     nodo local (o un nodo aleatorio si el cliente no es un DataNode), la segunda a un
+     nodo en un rack diferente, y la tercera a otro nodo del mismo rack que la segunda.
+
+
+2. Como afecta el tamano de bloques a la distribucion?, cuando se alcanza un mejor
+   balanceamiento?
+
+   RESPUESTA:
+   Los resultados muestran una correlacion directa entre numero de bloques y calidad
+   del balanceamiento:
+
+   - 2m (550 bloques):  ratio 0.957 -> Distribucion casi perfecta (269 vs 281)
+   - 32m (35 bloques):  ratio 0.842 -> Buena distribucion (19 vs 16)
+   - 128m (9 bloques):  ratio 0.286 -> Mala distribucion (7 vs 2)
+
+   Explicacion matematica: Con mas bloques, la ley de los grandes numeros favorece
+   una distribucion mas equilibrada. Si cada bloque tiene aproximadamente un 50% de
+   probabilidad de ir a cada DataNode:
+
+   - Con 550 bloques: la distribucion tiende naturalmente a ~275/275 (desviacion ~2%)
+   - Con 35 bloques: la variabilidad es mayor, pero sigue siendo razonable (~3 bloques
+     de diferencia)
+   - Con 9 bloques: la variabilidad es muy alta. Una diferencia de 5 bloques (7 vs 2)
+     representa un desbalance del 71.4%.
+
+   Conclusion: El mejor balanceamiento se alcanza con bloques mas pequenos (mas bloques
+   totales), ya que la distribucion estadistica tiende a equilibrarse con mas unidades.
+   Sin embargo, esto debe ponderarse con el overhead de metadatos (Ejercicio 1).
+   El tamano de 32m ofrece un buen compromiso: suficientes bloques (35) para lograr
+   un balanceamiento aceptable (0.842) sin un overhead excesivo de metadatos.
+
+
+3. Por que fijar numero de replicas a 1?, que sucederia si fuesen 2 o 3?
+
+   RESPUESTA:
+
+   Razon para usar replication=1:
+   Se fija replicacion a 1 para poder observar CLARAMENTE como HDFS distribuye los
+   bloques originales entre los DataNodes. Con replicacion > 1, cada bloque existiria
+   en multiples nodos, lo que enmascararia el patron de distribucion original.
+
+   Comportamiento con replication=2 (nuestro caso con 2 DataNodes):
+   - Cada bloque tendria exactamente 1 copia en worker1 y 1 copia en worker2.
+   - El "balanceamiento" seria siempre perfecto (ratio = 1.0) porque HDFS DEBE colocar
+     una replica en cada DataNode disponible.
+   - En realidad no estariamos midiendo distribucion, sino replicacion forzada.
+   - Espacio consumido: 1100 MB * 2 = 2200 MB (el doble).
+
+   Comportamiento con replication=3:
+   - Con solo 2 DataNodes, HDFS NO puede satisfacer replicacion=3 (necesitaria al
+     menos 3 DataNodes).
+   - HDFS aceptaria el fichero pero reportaria bloques "under-replicated".
+   - En la practica, cada bloque tendria 2 copias (una en cada DataNode), y la
+     tercera replica quedaria pendiente hasta que se anadiera un tercer DataNode.
+   - El HDFS Web UI mostraria warnings de sub-replicacion.
+
+   Trade-offs:
+   - Replicacion 1: Minimo espacio, sin tolerancia a fallos (si un DataNode cae,
+     se pierden los bloques que contenia).
+   - Replicacion 2: Doble espacio, tolera la caida de 1 DataNode.
+   - Replicacion 3 (estandar en produccion): Triple espacio, tolera la caida de
+     2 DataNodes. Es el valor por defecto de Hadoop por buenas razones.
+
+   Impacto en balanceamiento:
+   - Con replicacion = numero de DataNodes, el balanceamiento es trivialmente perfecto.
+   - Con replicacion < numero de DataNodes, el balanceamiento depende del algoritmo
+     de colocacion y del numero de bloques (como demostramos en este ejercicio).
+
+
+CONCLUSIONES EJERCICIO 2:
+-------------------------
+1. HDFS distribuye los bloques de forma aproximadamente equitativa usando un algoritmo
+   que considera espacio disponible, carga y topologia de red.
+2. A mayor numero de bloques (menor tamano de bloque), mejor es el balanceamiento
+   estadistico entre DataNodes.
+3. Con 550 bloques (2m), el balance es casi perfecto (0.957). Con solo 9 bloques
+   (128m), el desbalance es severo (0.286).
+4. La replicacion=1 permite observar el patron real de distribucion. Con replicacion
+   igual al numero de nodos, el balance es trivialmente perfecto.
+5. El tamano de bloque optimo debe equilibrar el balanceamiento (mas bloques = mejor)
+   con el overhead de metadatos (menos bloques = mejor).
+
+
+================================================================================
+CONCLUSIONES GENERALES
+================================================================================
+
+APRENDIZAJES CLAVE:
+------------------
+1. TAMANO DE BLOQUES: El tamano de bloque afecta directamente al rendimiento de
+   insercion, lectura y balanceamiento. No existe un tamano universalmente optimo;
+   depende del caso de uso.
+
+2. RENDIMIENTO DE INSERCION: Bloques muy pequenos (2m) casi duplican el tiempo de
+   insercion respecto a bloques grandes, debido al overhead de metadatos por bloque.
+
+3. RENDIMIENTO DE LECTURA: Bloques de 128m ofrecen el mejor rendimiento promedio de
+   lectura al equilibrar overhead de conexiones con capacidad de paralelismo. Bloques
+   excesivamente grandes eliminan el paralelismo.
+
+4. BALANCEAMIENTO: El numero de bloques es el factor determinante para el balanceamiento.
+   550 bloques logran un ratio de 0.957, mientras que 9 bloques solo alcanzan 0.286.
+
+5. ARQUITECTURA HDFS: El NameNode gestiona todos los metadatos en memoria RAM, lo que
+   impone un limite practico al numero de bloques. Este es el principal trade-off al
+   elegir tamanos de bloque.
+
+MEJORES PRACTICAS IDENTIFICADAS:
+--------------------------------
+1. TAMANO DE BLOQUES: Usar 128 MB como punto de partida. Aumentar a 256-512 MB para
+   ficheros muy grandes (>10 TB). Nunca usar bloques menores de 32 MB en produccion.
+
+2. REPLICACION: Usar replicacion=3 en produccion para tolerancia a fallos. Reducir a
+   2 solo si el espacio es muy limitado y se acepta menor tolerancia. Usar 1 solo para
+   datos temporales o facilmente regenerables.
+
+3. DISTRIBUCION: Monitorizar el balanceamiento del cluster regularmente. Si se detecta
+   desbalance, ejecutar el HDFS Balancer:
+   hdfs balancer -threshold 10
+
+RECOMENDACIONES PARA ENTORNOS PRODUCTIVOS:
+------------------------------------------
+1. SEGUN TIPO DE FICHEROS:
+   - Ficheros grandes (logs, datasets): bloques de 256-512 MB
+   - Ficheros medianos (reportes, exports): bloques de 128 MB (por defecto)
+   - Muchos ficheros pequenos: considerar HAR files o SequenceFiles para agruparlos
+
+2. SEGUN VOLUMEN DE DATOS:
+   - < 1 TB total: 128 MB es suficiente
+   - 1-100 TB: 128-256 MB, monitorizar memoria del NameNode
+   - > 100 TB: 256-512 MB o mas, considerar HDFS Federation
+
+3. SEGUN PATRONES DE ACCESO:
+   - Lectura secuencial completa: bloques grandes (256-512 MB)
+   - Acceso aleatorio/puntual: bloques menores (64-128 MB)
+   - MapReduce intensivo: ajustar bloque al tamano optimo de split del job
+
+
+================================================================================
+ANEXOS
+================================================================================
+
+ANEXO A: ESPECIFICACIONES DEL ENTORNO
+--------------------------------------
+- Hadoop Version: 3.3.6
+- Plataforma: Docker sobre Windows 10 (MINGW64)
+- HDFS Configuration:
+  * dfs.blocksize default: 128m
+  * dfs.replication default: 2
+  * Numero de DataNodes: 2
+- Nodos del cluster:
+  * NameNode: hadoop-master
+  * DataNode 1: hadoop-worker1 (172.23.0.3)
+  * DataNode 2: hadoop-worker2 (172.23.0.4)
+
+ANEXO B: COMANDOS COMPLETOS EJECUTADOS
+--------------------------------------
+
+--- Preparacion ---
+dd if=/dev/urandom of=/tmp/testfile.txt bs=1M count=1100
+# Resultado: 1153433600 bytes (1.2 GB, 1.1 GiB) copiados en 11.18s
+
+--- Ejercicio 1: Block Size ---
+
+# Block size 2m, replication=2
+time hdfs dfs -D dfs.blocksize=2097152 -D dfs.replication=2 -copyFromLocal /tmp/testfile.txt /ejercicio1_2m.txt
+# Insercion: 30.676s | Bloques: 550
+time hdfs dfs -cat /ejercicio1_2m.txt > /dev/null  # Lectura 1: 10.033s
+time hdfs dfs -cat /ejercicio1_2m.txt > /dev/null  # Lectura 2: 12.633s
+time hdfs dfs -cat /ejercicio1_2m.txt > /dev/null  # Lectura 3: 7.988s
+hdfs dfs -rm /ejercicio1_2m.txt
+
+# Block size 32m, replication=2
+time hdfs dfs -D dfs.blocksize=33554432 -D dfs.replication=2 -copyFromLocal /tmp/testfile.txt /ejercicio1_32m.txt
+# Insercion: 17.263s | Bloques: 35
+time hdfs dfs -cat /ejercicio1_32m.txt > /dev/null  # Lectura 1: 10.414s
+time hdfs dfs -cat /ejercicio1_32m.txt > /dev/null  # Lectura 2: 7.448s
+time hdfs dfs -cat /ejercicio1_32m.txt > /dev/null  # Lectura 3: 6.697s
+hdfs dfs -rm /ejercicio1_32m.txt
+
+# Block size 128m, replication=2
+time hdfs dfs -D dfs.blocksize=134217728 -D dfs.replication=2 -copyFromLocal /tmp/testfile.txt /ejercicio1_128m.txt
+# Insercion: 17.256s | Bloques: 9
+time hdfs dfs -cat /ejercicio1_128m.txt > /dev/null  # Lectura 1: 9.343s
+time hdfs dfs -cat /ejercicio1_128m.txt > /dev/null  # Lectura 2: 7.615s
+time hdfs dfs -cat /ejercicio1_128m.txt > /dev/null  # Lectura 3: 7.011s
+hdfs dfs -rm /ejercicio1_128m.txt
+
+# Block size 2GB, replication=2
+time hdfs dfs -D dfs.blocksize=2147483648 -D dfs.replication=2 -copyFromLocal /tmp/testfile.txt /ejercicio1_2gb.txt
+# Insercion: 15.294s | Bloques: 1
+time hdfs dfs -cat /ejercicio1_2gb.txt > /dev/null  # Lectura 1: 6.750s
+time hdfs dfs -cat /ejercicio1_2gb.txt > /dev/null  # Lectura 2: 8.267s
+time hdfs dfs -cat /ejercicio1_2gb.txt > /dev/null  # Lectura 3: 27.448s
+hdfs dfs -rm /ejercicio1_2gb.txt
+
+--- Ejercicio 2: Balanceamiento ---
+
+# Block size 2m, replication=1
+hdfs dfs -D dfs.blocksize=2097152 -D dfs.replication=1 -copyFromLocal /tmp/testfile.txt /ejercicio2_2m.txt
+hdfs fsck /ejercicio2_2m.txt -files -blocks -locations | grep 172.23.0.3 | wc -l  # Worker1: 269
+hdfs fsck /ejercicio2_2m.txt -files -blocks -locations | grep 172.23.0.4 | wc -l  # Worker2: 281
+hdfs dfs -rm /ejercicio2_2m.txt
+
+# Block size 32m, replication=1
+hdfs dfs -D dfs.blocksize=33554432 -D dfs.replication=1 -copyFromLocal /tmp/testfile.txt /ejercicio2_32m.txt
+hdfs fsck /ejercicio2_32m.txt -files -blocks -locations | grep 172.23.0.3 | wc -l  # Worker1: 19
+hdfs fsck /ejercicio2_32m.txt -files -blocks -locations | grep 172.23.0.4 | wc -l  # Worker2: 16
+hdfs dfs -rm /ejercicio2_32m.txt
+
+# Block size 128m, replication=1
+hdfs dfs -D dfs.blocksize=134217728 -D dfs.replication=1 -copyFromLocal /tmp/testfile.txt /ejercicio2_128m.txt
+hdfs fsck /ejercicio2_128m.txt -files -blocks -locations | grep 172.23.0.3 | wc -l  # Worker1: 7
+hdfs fsck /ejercicio2_128m.txt -files -blocks -locations | grep 172.23.0.4 | wc -l  # Worker2: 2
+hdfs dfs -rm /ejercicio2_128m.txt
+
+--- Limpieza ---
+rm /tmp/testfile.txt
+
+
+================================================================================
+FIN DEL DOCUMENTO
+================================================================================
